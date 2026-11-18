@@ -48,7 +48,99 @@ window.Music = (function () {
     return { f: n === 'R' ? null : freq(n), d: d ? parseFloat(d) : 1 };
   });
 
-  const tracks = SONGS.map(s => ({ type: 'synth', title: s.title, bpm: s.bpm, jingle: !!s.jingle, notes: parse(s.notes) }));
+  /* Famous (copyrighted) Christmas hits are streamed through YouTube's embedded player, which
+   * handles the licensing and plays full songs for everyone. All IDs were checked to allow embedding.
+   * YouTube's rules: the player must stay visible (min 200×200), so it lives in the right-hand music panel. */
+  const HITS = [
+    ['All I Want for Christmas Is You', 'Mariah Carey', 'aAkMkVFwAoo'],
+    ['Last Christmas', 'Wham!', 'E8gmARGvPlI'],
+    ["Rockin' Around the Christmas Tree", 'Brenda Lee', '1qYz7rfgLWE'],
+    ['Jingle Bell Rock', 'Bobby Helms', 'itcMLwMEeMQ'],
+    ['Santa Tell Me', 'Ariana Grande', 'nlR0MkrRklg'],
+    ["It's Beginning to Look a Lot Like Christmas", 'Michael Bublé', 'QJ5DOWPGxwg'],
+    ["It's the Most Wonderful Time of the Year", 'Andy Williams', 'AN_R4pR1hck'],
+    ['Feliz Navidad', 'José Feliciano', 'N8NcQzMQN_U'],
+    ['Mistletoe', 'Justin Bieber', 'LUjn3RpkcKY'],
+    ['Merry Christmas', 'Ed Sheeran & Elton John', 'Q_yuO8UNGmY'],
+    ['Let It Snow!', 'Dean Martin', 'mN7LW0Y00kE'],
+    ['A Holly Jolly Christmas', 'Burl Ives', 'nVMCUtsmWmQ'],
+    ['The Christmas Song', 'Nat King Cole', 'hwacxSnc4tI'],
+    ['Happy Xmas (War Is Over)', 'John Lennon', 'z8Vfp48laS8'],
+    ['Wonderful Christmastime', 'Paul McCartney', 'V9BZDpni56Y'],
+    ['Fairytale of New York', 'The Pogues', 'j9jbdgZidu8'],
+    ['Merry Christmas Everyone', "Shakin' Stevens", 'N-PyWfVkjZc'],
+    ['Snowman', 'Sia', 'gset79KMmt0'],
+    ["Do They Know It's Christmas?", 'Band Aid', 'bjQzJAKxTrE'],
+  ];
+
+  const tracks = [
+    ...HITS.map(([title, artist, videoId]) => ({ type: 'youtube', title, artist, videoId })),
+    ...SONGS.map(s => ({ type: 'synth', title: s.title, artist: 'Music-box carol', bpm: s.bpm, jingle: !!s.jingle, notes: parse(s.notes) })),
+  ];
+
+  /* ---- YouTube player (loaded on first use) ---- */
+  // YouTube refuses to play embeds on pages opened straight from disk (file://), so skip the hits there.
+  const OPENED_AS_FILE = location.protocol === 'file:';
+  let yt = null, ytPromise = null, ytFailed = OPENED_AS_FILE, ytErrors = 0, noticeShown = false;
+  const noticeListeners = [];
+  function ytUnavailable() {
+    ytFailed = true;
+    if (noticeShown) return;
+    noticeShown = true;
+    const msg = OPENED_AS_FILE
+      ? 'The hit songs need the site opened from a web address. Double-click start.bat (or go to http://localhost:5173). Playing carols for now.'
+      : "Couldn't load the hit songs from YouTube (offline or blocked). Playing carols instead.";
+    noticeListeners.forEach(f => f(msg));
+  }
+  function loadYT() {
+    if (ytPromise) return ytPromise;
+    ytPromise = new Promise((resolve, reject) => {
+      const fail = setTimeout(() => reject(new Error('YouTube took too long to load')), 12000);
+      window.onYouTubeIframeAPIReady = () => {
+        yt = new YT.Player('ytPlayer', {
+          width: '100%', height: '100%',
+          // Clean look: no YouTube control bar / annotations; our own buttons control playback.
+          playerVars: { playsinline: 1, rel: 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3 },
+          events: {
+            onReady: () => { clearTimeout(fail); resolve(yt); },
+            onStateChange: onYtState,
+            onError: onYtError,
+          },
+        });
+      };
+      const s = document.createElement('script');
+      s.src = 'https://www.youtube.com/iframe_api';
+      s.onerror = () => { clearTimeout(fail); reject(new Error('YouTube blocked or offline')); };
+      document.head.appendChild(s);
+    });
+    return ytPromise;
+  }
+  const isYT = () => tracks[index].type === 'youtube';
+
+  function onYtState(e) {
+    if (!isYT()) return;
+    if (e.data === 0) { ytErrors = 0; if (playing) next(); }                            // ended
+    else if (e.data === 1) { ytErrors = 0; if (!playing) { playing = true; emit(); } }  // played from YouTube's own UI
+    else if (e.data === 2 && playing) { playing = false; emit(); }                     // paused from YouTube's own UI
+  }
+  function onYtError() {
+    if (!isYT()) return;
+    // A video was removed or blocked in this country: skip it. If they all fail, fall back to the carols.
+    if (++ytErrors >= HITS.length) { ytUnavailable(); playIndex(firstNonYT()); } else next();
+  }
+  const firstNonYT = () => tracks.findIndex(t => t.type !== 'youtube');
+
+  function startYouTubeTrack(tr) {
+    loadYT().then(p => {
+      if (tracks[index] !== tr) return; // user skipped while it was loading
+      p.setVolume(Math.round(volume * 100));
+      p.loadVideoById(tr.videoId);
+      if (!playing) p.pauseVideo();
+    }).catch(() => {
+      ytUnavailable();
+      if (tracks[index] === tr) playIndex(firstNonYT());
+    });
+  }
 
   let ctx = null, master, dry, reverbIn, noiseBuf, bus = null;
   let index = 0, playing = false, started = false, loaded = false, volume = 0.6;
@@ -56,7 +148,7 @@ window.Music = (function () {
   const audio = new Audio();
   const listeners = [];
 
-  const state = () => ({ index, playing, started, title: tracks[index].title, tracks });
+  const state = () => ({ index, playing, started, title: tracks[index].title, artist: tracks[index].artist, type: tracks[index].type, tracks });
   const emit = () => listeners.forEach(f => f(state()));
 
   function ensureCtx() {
@@ -141,12 +233,18 @@ window.Music = (function () {
     }
   }
 
-  function load(i) {
+  function load(i, dir = 1) {
     index = (i + tracks.length) % tracks.length;
+    // If YouTube can't load here, skip the hits.
+    if (ytFailed && isYT()) ytUnavailable();
+    if (ytFailed) { let guard = tracks.length; while (isYT() && guard--) index = (index + dir + tracks.length) % tracks.length; }
     const tr = tracks[index];
     audio.pause();
+    if (yt && tr.type !== 'youtube') yt.pauseVideo();
     newBus();
-    if (tr.type === 'synth') {
+    if (tr.type === 'youtube') {
+      startYouTubeTrack(tr);
+    } else if (tr.type === 'synth') {
       noteIdx = 0; beatPos = 0; endAt = null;
       nextTime = ctx.currentTime + 0.12;
       if (!timer) timer = setInterval(tick, 25);
@@ -158,11 +256,11 @@ window.Music = (function () {
     emit();
   }
 
-  function playIndex(i) {
+  function playIndex(i, dir = 1) {
     ensureCtx();
     started = true; playing = true; loaded = true;
     if (ctx.state === 'suspended') ctx.resume();
-    load(i);
+    load(i, dir);
   }
 
   function play() {
@@ -171,6 +269,7 @@ window.Music = (function () {
     if (ctx.state === 'suspended') ctx.resume();
     if (!loaded) { loaded = true; load(index); return; }
     if (tracks[index].type === 'file') audio.play().catch(() => {});
+    if (isYT() && yt) yt.playVideo();
     emit();
   }
 
@@ -178,30 +277,34 @@ window.Music = (function () {
     playing = false;
     if (ctx) ctx.suspend();
     audio.pause();
+    if (yt) yt.pauseVideo();
     emit();
   }
 
-  const next = () => playIndex(index + 1);
-  const prev = () => playIndex(index - 1);
+  const next = () => playIndex(index + 1, 1);
+  const prev = () => playIndex(index - 1, -1);
 
   audio.addEventListener('ended', () => { if (playing) next(); });
   audio.addEventListener('error', () => { if (playing && tracks[index].type === 'file') next(); });
 
   return {
     play, pause, next, prev, playIndex,
+    _debug: () => ({ ytState: yt && yt.getPlayerState ? yt.getPlayerState() : null, ytFailed, ytErrors, ctx: ctx && ctx.state }),
     toggle: () => (playing ? pause() : play()),
     state,
     onChange: f => { listeners.push(f); f(state()); },
+    onNotice: f => noticeListeners.push(f),
     setVolume(v) {
       volume = v;
       if (master) master.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
       audio.volume = v;
+      if (yt) yt.setVolume(Math.round(v * 100));
     },
     addFiles(files) {
       const first = tracks.length;
       [...files].forEach(file => {
         if (!file.type.startsWith('audio/')) return;
-        tracks.push({ type: 'file', title: file.name.replace(/\.[^.]+$/, ''), url: URL.createObjectURL(file) });
+        tracks.push({ type: 'file', title: file.name.replace(/\.[^.]+$/, ''), artist: 'Your song', url: URL.createObjectURL(file) });
       });
       if (tracks.length > first) playIndex(first); else emit();
     },

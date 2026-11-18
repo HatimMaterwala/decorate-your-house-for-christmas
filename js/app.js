@@ -39,7 +39,7 @@
 
   function fit() {
     const r = wrap.getBoundingClientRect();
-    const pad = window.innerWidth < 860 ? 12 : 28;
+    const pad = window.innerWidth < 860 ? 12 : 18;
     scale = Math.min((r.width - pad * 2) / WORLD.w, (r.height - pad * 2) / WORLD.h);
     stage.size({ width: Math.round(WORLD.w * scale), height: Math.round(WORLD.h * scale) });
     stage.scale({ x: scale, y: scale });
@@ -67,13 +67,14 @@
 
   /* ---------------- Toast ---------------- */
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, ms = 2600) {
     const el = $('#toast');
     el.textContent = msg;
     el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+    toastTimer = setTimeout(() => el.classList.remove('show'), ms);
   }
+  Music.onNotice(msg => toast(msg, 9000));
 
   /* ---------------- Photo upload ---------------- */
   function loadPhoto(file) {
@@ -580,54 +581,56 @@
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); $('#dupBtn').click(); }
   });
 
-  /* ---------------- Music player ---------------- */
+  /* ---------------- Music panel (right column) ---------------- */
+  const panel = $('#musicPanel');
   const playBtn = $('#playBtn');
   const nudge = $('#musicNudge');
   const list = $('#trackList');
+  const esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const groups = { youtube: 'Christmas hits', synth: 'Music-box carols', file: 'Your songs' };
 
   Music.onChange(s => {
     $('#trackTitle').textContent = s.title;
+    $('#trackTitle').title = s.title;
+    $('#trackArtist').textContent = s.artist || '';
     playBtn.textContent = s.playing ? '❚❚' : '▶';
-    $('#player').classList.toggle('is-playing', s.playing);
+    playBtn.title = playBtn.ariaLabel = s.playing ? 'Stop music' : 'Play music';
+    panel.classList.toggle('is-playing', s.playing);
+    panel.classList.toggle('has-video', s.started && s.type === 'youtube');
     if (s.started) nudge.classList.add('hidden');
+
     list.innerHTML = '';
+    let lastType = null;
     s.tracks.forEach((t, i) => {
+      if (t.type !== lastType) {
+        lastType = t.type;
+        const h = document.createElement('li');
+        h.className = 'group';
+        h.textContent = groups[t.type];
+        list.appendChild(h);
+      }
       const li = document.createElement('li');
       li.className = i === s.index ? 'current' : '';
-      li.innerHTML = `<span>${i === s.index && s.playing ? '♪ ' : ''}${t.title.replace(/</g, '&lt;')}</span><small>${t.type === 'file' ? 'yours' : 'carol'}</small>`;
+      li.title = `${t.title} — ${t.artist}`;
+      li.innerHTML = `<span>${i === s.index && s.playing ? '♪ ' : ''}${esc(t.title)}</span><small>${t.type === 'synth' ? '' : esc(t.artist)}</small>`;
       li.onclick = () => Music.playIndex(i);
       list.appendChild(li);
     });
+    const cur = list.querySelector('li.current');
+    if (cur) cur.scrollIntoView({ block: 'nearest' });
   });
-
-  // Mini player (stop + expand) <-> full player.
-  const mini = $('#playerMini');
-  const miniPlay = $('#miniPlayBtn');
-  Music.onChange(s => {
-    miniPlay.textContent = s.playing ? '❚❚' : '▶';
-    miniPlay.title = miniPlay.ariaLabel = s.playing ? 'Stop music' : 'Play music';
-    mini.classList.toggle('is-playing', s.playing);
-  });
-  const setExpanded = open => {
-    $('#player').classList.toggle('hidden', !open);
-    mini.classList.toggle('hidden', open);
-    if (!open) $('#playlist').classList.add('hidden');
-  };
-  miniPlay.onclick = () => Music.toggle();
-  $('#expandBtn').onclick = () => setExpanded(true);
-  $('#collapseBtn').onclick = () => setExpanded(false);
 
   playBtn.onclick = () => Music.toggle();
   $('#nextBtn').onclick = () => Music.next();
   $('#prevBtn').onclick = () => Music.prev();
   $('#volume').addEventListener('input', e => Music.setVolume(+e.target.value));
-  $('#listBtn').onclick = () => $('#playlist').classList.toggle('hidden');
   $('#songInput').addEventListener('change', e => { Music.addFiles(e.target.files); e.target.value = ''; });
 
-  // Browsers block audio until the user interacts, so carols start on the first click anywhere.
+  // Browsers block audio until the user interacts, so music starts on the first click anywhere
+  // (clicks inside the music panel are left to its own buttons).
   const kick = e => {
     document.removeEventListener('pointerdown', kick, true);
-    if (!Music.state().started && !e.target.closest('#player, #playerMini')) Music.play();
+    if (!Music.state().started && !e.target.closest('#musicPanel')) Music.play();
   };
   document.addEventListener('pointerdown', kick, true);
 

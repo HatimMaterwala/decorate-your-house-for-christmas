@@ -77,37 +77,42 @@
         <button id="cancelDraw">Cancel</button>
       </div>
 
-      <div class="music-nudge" id="musicNudge">♪ Click anywhere to start the carols</div>
       <div class="toast" id="toast"></div>
-
-      <div class="player-mini" id="playerMini">
-        <button id="miniPlayBtn" class="play" aria-label="Stop music" title="Stop music">❚❚</button>
-        <button id="expandBtn" aria-label="Open music player" title="Open music player">
-          <span class="eq"><i></i><i></i><i></i><i></i></span>
-        </button>
-      </div>
-
-      <div class="player hidden" id="player">
-        <div class="player-art">🎄</div>
-        <div class="player-info">
-          <div class="player-label">Now playing</div>
-          <div class="player-title" id="trackTitle">Jingle Bells</div>
-        </div>
-        <div class="player-controls">
-          <button id="prevBtn" aria-label="Previous">⏮</button>
-          <button id="playBtn" class="play" aria-label="Play / pause">▶</button>
-          <button id="nextBtn" aria-label="Next">⏭</button>
-        </div>
-        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.6" aria-label="Volume">
-        <button id="listBtn" aria-label="Playlist" title="Playlist">☰</button>
-        <button id="collapseBtn" aria-label="Minimise player" title="Minimise player">⌄</button>
-        <div class="playlist hidden" id="playlist">
-          <ul id="trackList"></ul>
-          <label class="btn wide" for="songInput">+ Add your own songs</label>
-          <input type="file" id="songInput" accept="audio/*" multiple hidden>
-        </div>
-      </div>
     </main>
+
+    <!-- Right column: music panel. The YouTube player lives here so it never covers the canvas. -->
+    <aside class="music-panel" id="musicPanel">
+      <h3 class="music-heading"><span class="eq" id="eq"><i></i><i></i><i></i><i></i></span> Christmas music</h3>
+
+      <div class="screen">
+        <div class="yt-frame" id="ytFrame"><div id="ytPlayer"></div></div>
+        <div class="screen-placeholder" id="screenArt">
+          <div class="screen-tree">🎄</div>
+          <div class="screen-hint" id="musicNudge">Click anywhere to start the music</div>
+        </div>
+      </div>
+
+      <div class="now">
+        <div class="now-title" id="trackTitle">All I Want for Christmas Is You</div>
+        <div class="now-artist" id="trackArtist">Mariah Carey</div>
+      </div>
+
+      <div class="controls">
+        <button id="prevBtn" aria-label="Previous song" title="Previous">⏮</button>
+        <button id="playBtn" class="play" aria-label="Play / stop" title="Play / stop">▶</button>
+        <button id="nextBtn" aria-label="Next song" title="Next">⏭</button>
+      </div>
+      <label class="volume-row" title="Volume">
+        <span>🔈</span>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.6" aria-label="Volume">
+        <span>🔊</span>
+      </label>
+
+      <ul class="tracklist" id="trackList"></ul>
+
+      <label class="btn wide add-songs" for="songInput">+ Add your own songs</label>
+      <input type="file" id="songInput" accept="audio/*" multiple hidden>
+    </aside>
   </div>
 
   <script src="vendor/konva.min.js"></script>
