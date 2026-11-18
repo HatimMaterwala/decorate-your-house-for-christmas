@@ -101,28 +101,88 @@
     selected = node;
     tr.nodes(node ? [node] : []);
     tr.moveToTop();
-    selTools.classList.toggle('hidden', !node);
+    if (!node) hideMenu();
     decoLayer.batchDraw();
+  }
+
+  const decoOf = t => (t.hasName('deco') ? t : t.findAncestor('.deco'));
+
+  /* ---- Right-click menu, shown beside the decoration ---- */
+  function hideMenu() { selTools.classList.add('hidden'); }
+
+  function showMenu(node) {
+    selTools.classList.remove('hidden');
+    placeMenu(node);
+  }
+
+  // Put the menu just to the right of the item (or to its left if there's no room), vertically centred.
+  function placeMenu(node) {
+    if (selTools.classList.contains('hidden')) return;
+    const gap = 14;
+    const r = node.getClientRect();                       // item box in stage pixels
+    const s = stage.container().getBoundingClientRect();  // stage position on screen
+    const w = wrap.getBoundingClientRect();
+    const mw = selTools.offsetWidth, mh = selTools.offsetHeight;
+    const ox = s.left - w.left, oy = s.top - w.top;
+    let left = ox + r.x + r.width + gap;
+    if (left + mw > w.width - 8) left = ox + r.x - mw - gap;  // flip to the left side
+    left = Math.max(8, Math.min(left, w.width - mw - 8));
+    let top = oy + r.y + r.height / 2 - mh / 2;
+    top = Math.max(8, Math.min(top, w.height - mh - 8));
+    selTools.style.left = left + 'px';
+    selTools.style.top = top + 'px';
   }
 
   stage.on('mousedown touchstart', e => {
     if (mode === 'draw') return;
+    if (e.evt.button === 2) return; // right button is handled by contextmenu
+    hideMenu();
     const t = e.target;
     if (t === stage || t.hasName('bg')) return select(null);
     if (t.findAncestor('Transformer')) return;
-    const deco = t.hasName('deco') ? t : t.findAncestor('.deco');
+    const deco = decoOf(t);
     if (deco) select(deco);
   });
+
+  stage.on('contextmenu', e => {
+    e.evt.preventDefault();
+    if (mode === 'draw') return;
+    const deco = decoOf(e.target) || (e.target.findAncestor('Transformer') ? selected : null);
+    if (!deco) { select(null); return; }
+    select(deco);
+    showMenu(deco);
+  });
+  wrap.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Phones have no right-click: long-press an item to open the same menu.
+  let pressTimer = null;
+  stage.on('touchstart', e => {
+    clearTimeout(pressTimer);
+    const deco = mode === 'select' && decoOf(e.target);
+    if (deco) pressTimer = setTimeout(() => { select(deco); showMenu(deco); }, 550);
+  });
+  stage.on('touchmove touchend dragstart', () => clearTimeout(pressTimer));
+
+  // Moving or resizing the item closes the menu.
+  decoLayer.on('dragstart transformstart', hideMenu);
+  document.addEventListener('pointerdown', e => {
+    if (!selTools.contains(e.target) && !e.target.closest('#stage')) hideMenu();
+  });
+  window.addEventListener('resize', hideMenu);
+
+  // After an action, keep the menu next to the item (it may have moved or changed size).
+  const keepMenu = () => { if (selected) placeMenu(selected); };
 
   $('#dupBtn').onclick = () => {
     if (!selected) return;
     const c = selected.clone({ x: selected.x() + 30 * U, y: selected.y() + 30 * U });
     decoLayer.add(c);
     select(c);
+    keepMenu();
   };
-  $('#flipBtn').onclick = () => { if (selected) { selected.scaleX(-selected.scaleX()); decoLayer.batchDraw(); } };
-  $('#fwdBtn').onclick = () => { if (selected) { selected.moveUp(); tr.moveToTop(); decoLayer.batchDraw(); } };
-  $('#backBtn').onclick = () => { if (selected) { selected.moveDown(); decoLayer.batchDraw(); } };
+  $('#flipBtn').onclick = () => { if (selected) { selected.scaleX(-selected.scaleX()); decoLayer.batchDraw(); keepMenu(); } };
+  $('#fwdBtn').onclick = () => { if (selected) { selected.moveToTop(); tr.moveToTop(); decoLayer.batchDraw(); } };
+  $('#backBtn').onclick = () => { if (selected) { selected.moveToBottom(); decoLayer.batchDraw(); } };
   $('#delBtn').onclick = () => { if (selected) { selected.destroy(); select(null); } };
 
   function clearAll() {

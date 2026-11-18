@@ -62,12 +62,13 @@
       <canvas id="snow"></canvas>
       <div class="drop-hint">Drop your house photo here</div>
 
-      <div class="floating seltools hidden" id="selTools">
-        <button id="dupBtn" title="Duplicate (Ctrl+D)">⧉ Copy</button>
-        <button id="flipBtn" title="Flip">⇋ Flip</button>
-        <button id="fwdBtn" title="Bring forward">▲ Front</button>
-        <button id="backBtn" title="Send backward">▼ Back</button>
-        <button id="delBtn" class="danger" title="Delete (Del)">🗑 Delete</button>
+      <div class="ctxmenu hidden" id="selTools" role="menu">
+        <button id="dupBtn" role="menuitem"><span>⧉</span> Copy <kbd>Ctrl+D</kbd></button>
+        <button id="flipBtn" role="menuitem"><span>⇋</span> Flip</button>
+        <button id="fwdBtn" role="menuitem"><span>▲</span> Bring to front</button>
+        <button id="backBtn" role="menuitem"><span>▼</span> Send to back</button>
+        <hr>
+        <button id="delBtn" role="menuitem" class="danger"><span>🗑</span> Delete <kbd>Del</kbd></button>
       </div>
 
       <div class="floating drawbar hidden" id="drawBar">
