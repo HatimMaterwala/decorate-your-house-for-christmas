@@ -617,7 +617,11 @@
       list.appendChild(li);
     });
     const cur = list.querySelector('li.current');
-    if (cur) cur.scrollIntoView({ block: 'nearest' });
+    if (cur) {
+      const top = cur.offsetTop - list.offsetTop, bottom = top + cur.offsetHeight;
+      if (top < list.scrollTop) list.scrollTop = top - 30;
+      else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight + 8;
+    }
   });
 
   playBtn.onclick = () => Music.toggle();
